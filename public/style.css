@@ -364,6 +364,24 @@ body {
 
 /* RESPONSIVO */
 @media (max-width: 600px) {
-    #sidebar { width: 100%; min-width: unset; }
     #tela-chat { flex-direction: column; }
+    
+    #sidebar {
+        width: 100%;
+        min-width: unset;
+        height: 100vh;
+    }
+
+    #area-chat {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        background: #0d1117;
+    }
+
+    #area-chat.mobile-ativo {
+        display: flex;
+        flex-direction: column;
+    }
 }

@@ -12,13 +12,11 @@
     <div id="tela-auth">
         <h1>NEXUS</h1>
         <p class="subtitulo">chat seguro e privado</p>
-
         <div class="card">
             <div class="tabs">
                 <div class="tab ativo" onclick="mudarTab('login')">Entrar</div>
                 <div class="tab" onclick="mudarTab('registrar')">Criar conta</div>
             </div>
-
             <div id="form-login">
                 <div class="campo">
                     <label>Username</label>
@@ -30,7 +28,6 @@
                 </div>
                 <button class="btn-primary" onclick="fazerLogin()">Entrar</button>
             </div>
-
             <div id="form-registrar" style="display:none;">
                 <div class="campo">
                     <label>Username</label>
@@ -42,21 +39,25 @@
                 </div>
                 <button class="btn-primary" onclick="fazerRegistro()">Criar conta</button>
             </div>
-
             <div id="erro-auth"></div>
         </div>
     </div>
 
     <!-- TELA DE CHAT -->
     <div id="tela-chat">
+
+        <!-- SIDEBAR -->
         <div id="sidebar">
             <div id="sidebar-header">
                 <span class="logo">NEXUS</span>
-                <span id="usuario-logado"></span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span id="usuario-logado"></span>
+                    <button onclick="abrirModalGrupo()" style="background:none; border:1px solid #30363d; border-radius:6px; color:#8b949e; padding:4px 8px; cursor:pointer; font-size:0.75rem;">+ Grupo</button>
+                </div>
             </div>
 
             <div id="busca-usuario">
-                <input type="text" id="input-busca" placeholder="Buscar ou iniciar conversa..." 
+                <input type="text" id="input-busca" placeholder="Buscar ou iniciar conversa..."
                     oninput="buscarUsuario(this.value)" />
             </div>
 
@@ -65,6 +66,7 @@
             <button id="btn-logout" onclick="logout()">⬡ Sair</button>
         </div>
 
+        <!-- ÁREA DE CHAT -->
         <div id="area-chat">
             <div id="tela-vazia">
                 <span style="font-size:2rem;">⬡</span>
@@ -73,6 +75,8 @@
 
             <div id="conversa-aberta" style="display:none; flex-direction:column; height:100%;">
                 <div id="chat-header">
+                    <button id="btn-voltar" onclick="voltarSidebar()" 
+                        style="display:none; background:none; border:none; color:#58a6ff; font-size:1.2rem; cursor:pointer; margin-right:8px;">←</button>
                     <div class="avatar" id="header-avatar"></div>
                     <span class="nome-conversa" id="header-nome"></span>
                 </div>
@@ -89,6 +93,27 @@
         </div>
     </div>
 
+    <!-- MODAL GRUPO -->
+    <div id="modal-grupo" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center;">
+        <div style="background:#161b22; border:1px solid #30363d; border-radius:12px; padding:24px; width:100%; max-width:360px;">
+            <h3 style="margin-bottom:16px; color:#c9d1d9;">Criar Grupo</h3>
+            <div class="campo">
+                <label>Nome do grupo</label>
+                <input type="text" id="grupo-nome" placeholder="Ex: Trabalho, Amigos..." />
+            </div>
+            <div class="campo">
+                <label>Adicionar participantes</label>
+                <input type="text" id="grupo-busca" placeholder="Buscar usuário..." oninput="buscarParaGrupo(this.value)" />
+            </div>
+            <div id="grupo-resultados" style="margin-bottom:12px;"></div>
+            <div id="grupo-selecionados" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;"></div>
+            <div style="display:flex; gap:10px;">
+                <button onclick="fecharModalGrupo()" style="flex:1; padding:10px; background:none; border:1px solid #30363d; border-radius:8px; color:#c9d1d9; cursor:pointer;">Cancelar</button>
+                <button onclick="criarGrupo()" style="flex:1; padding:10px; background:#238636; border:none; border-radius:8px; color:white; cursor:pointer;">Criar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
         let token = localStorage.getItem('token')
@@ -96,10 +121,7 @@
         let conversaAtualId = null
         let socket = null
 
-        // Se já tem token, vai direto pro chat
-        if (token && usuarioAtual) {
-            mostrarChat()
-        }
+        if (token && usuarioAtual) mostrarChat()
 
         function mudarTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('ativo'))
@@ -113,20 +135,13 @@
             const username = document.getElementById('login-username').value.trim()
             const senha = document.getElementById('login-senha').value
             const erro = document.getElementById('erro-auth')
-
             const resposta = await fetch('/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, senha })
             })
-
             const dados = await resposta.json()
-
-            if (dados.erro) {
-                erro.textContent = dados.erro
-                return
-            }
-
+            if (dados.erro) { erro.textContent = dados.erro; return }
             salvarSessao(dados)
             mostrarChat()
         }
@@ -135,20 +150,13 @@
             const username = document.getElementById('reg-username').value.trim()
             const senha = document.getElementById('reg-senha').value
             const erro = document.getElementById('erro-auth')
-
             const resposta = await fetch('/auth/registrar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, senha })
             })
-
             const dados = await resposta.json()
-
-            if (dados.erro) {
-                erro.textContent = dados.erro
-                return
-            }
-
+            if (dados.erro) { erro.textContent = dados.erro; return }
             salvarSessao(dados)
             mostrarChat()
         }
@@ -176,20 +184,14 @@
 
         function iniciarSocket() {
             socket = io({ auth: { token } })
-
-            socket.on('connect', () => {
-                console.log('Socket conectado')
-            })
-
+            socket.on('connect', () => console.log('Socket conectado'))
             socket.on('nova-mensagem', (mensagem) => {
-                if (mensagem.conversa_id === conversaAtualId) {
-                    adicionarBalao(mensagem)
-                }
+                if (mensagem.conversa_id === conversaAtualId) adicionarBalao(mensagem)
                 carregarConversas()
             })
-
-            socket.on('erro', (msg) => {
-                console.error('Erro socket:', msg)
+            socket.on('erro', (msg) => console.error('Erro socket:', msg))
+            socket.on('atualizar-conversas', () => {
+                carregarConversas()
             })
         }
 
@@ -204,12 +206,10 @@
         function renderizarConversas(conversas) {
             const lista = document.getElementById('lista-conversas')
             lista.innerHTML = ''
-
             if (conversas.length === 0) {
                 lista.innerHTML = '<p style="padding:16px; color:#6e7681; font-size:0.8rem;">Nenhuma conversa ainda</p>'
                 return
             }
-
             conversas.forEach(c => {
                 const div = document.createElement('div')
                 div.className = 'conversa-item' + (c.id === conversaAtualId ? ' ativa' : '')
@@ -226,18 +226,13 @@
         }
 
         async function buscarUsuario(termo) {
-            if (termo.length < 2) {
-                carregarConversas()
-                return
-            }
-
+            if (termo.length < 2) { carregarConversas(); return }
             const resposta = await fetch(`/usuarios/buscar?q=${termo}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             const usuarios = await resposta.json()
             const lista = document.getElementById('lista-conversas')
             lista.innerHTML = ''
-
             usuarios.forEach(u => {
                 const div = document.createElement('div')
                 div.className = 'conversa-item'
@@ -256,10 +251,7 @@
         async function iniciarConversa(usuarioId, username) {
             const resposta = await fetch('/conversas', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ usuario_id: usuarioId })
             })
             const dados = await resposta.json()
@@ -269,14 +261,16 @@
 
         async function abrirConversa(id, nome) {
             conversaAtualId = id
+            if (window.innerWidth <= 600) {
+                document.getElementById('area-chat').classList.add('mobile-ativo')
+                document.getElementById('btn-voltar').style.display = 'block'
+            }
             document.getElementById('tela-vazia').style.display = 'none'
             const conv = document.getElementById('conversa-aberta')
             conv.style.display = 'flex'
             document.getElementById('header-nome').textContent = nome
             document.getElementById('header-avatar').textContent = nome[0].toUpperCase()
-
             document.querySelectorAll('.conversa-item').forEach(el => el.classList.remove('ativa'))
-
             const resposta = await fetch(`/conversas/${id}/mensagens`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -285,7 +279,6 @@
             container.innerHTML = ''
             mensagens.forEach(m => adicionarBalao(m))
             container.scrollTop = container.scrollHeight
-
             socket.emit('entrar-conversa', id)
         }
 
@@ -294,11 +287,7 @@
             const div = document.createElement('div')
             const enviada = mensagem.remetente_id === usuarioAtual.id
             div.className = `balao ${enviada ? 'enviada' : 'recebida'}`
-
-            const horario = new Date(mensagem.criado_em).toLocaleTimeString('pt-BR', {
-                hour: '2-digit', minute: '2-digit'
-            })
-
+            const horario = new Date(mensagem.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
             div.innerHTML = `
                 ${!enviada ? `<div class="remetente">${mensagem.username}</div>` : ''}
                 ${mensagem.conteudo ? `<div>${mensagem.conteudo}</div>` : ''}
@@ -311,23 +300,88 @@
         async function enviarMensagem() {
             const input = document.getElementById('input-mensagem')
             const conteudo = input.value.trim()
-
             if (!conteudo || !conversaAtualId) return
-
-            socket.emit('mensagem', {
-                conversa_id: conversaAtualId,
-                conteudo
-            })
-
+            socket.emit('mensagem', { conversa_id: conversaAtualId, conteudo })
             input.value = ''
         }
 
         document.getElementById('input-mensagem').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                enviarMensagem()
-            }
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensagem() }
         })
+
+        let grupoSelecionados = []
+
+        function abrirModalGrupo() {
+            grupoSelecionados = []
+            document.getElementById('grupo-selecionados').innerHTML = ''
+            document.getElementById('grupo-resultados').innerHTML = ''
+            document.getElementById('grupo-nome').value = ''
+            document.getElementById('grupo-busca').value = ''
+            document.getElementById('modal-grupo').style.display = 'flex'
+        }
+
+        function fecharModalGrupo() {
+            document.getElementById('modal-grupo').style.display = 'none'
+        }
+
+        async function buscarParaGrupo(termo) {
+            if (termo.length < 2) return
+            const resposta = await fetch(`/usuarios/buscar?q=${termo}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            const usuarios = await resposta.json()
+            const div = document.getElementById('grupo-resultados')
+            div.innerHTML = ''
+            usuarios.forEach(u => {
+                if (grupoSelecionados.find(s => s.id === u.id)) return
+                const item = document.createElement('div')
+                item.style.cssText = 'padding:8px 12px; cursor:pointer; border-radius:6px; font-size:0.85rem;'
+                item.textContent = u.username
+                item.onmouseover = () => item.style.background = '#21262d'
+                item.onmouseout = () => item.style.background = 'none'
+                item.onclick = () => adicionarAoGrupo(u)
+                div.appendChild(item)
+            })
+        }
+
+        function adicionarAoGrupo(usuario) {
+            if (grupoSelecionados.find(u => u.id === usuario.id)) return
+            grupoSelecionados.push(usuario)
+            const div = document.getElementById('grupo-selecionados')
+            const tag = document.createElement('span')
+            tag.style.cssText = 'background:#1f6feb; padding:4px 10px; border-radius:20px; font-size:0.75rem; cursor:pointer;'
+            tag.textContent = usuario.username + ' ×'
+            tag.onclick = () => {
+                grupoSelecionados = grupoSelecionados.filter(u => u.id !== usuario.id)
+                tag.remove()
+            }
+            div.appendChild(tag)
+            document.getElementById('grupo-resultados').innerHTML = ''
+            document.getElementById('grupo-busca').value = ''
+        }
+
+        async function criarGrupo() {
+            const nome = document.getElementById('grupo-nome').value.trim()
+            if (!nome || grupoSelecionados.length < 1) {
+                alert('Informe o nome e pelo menos 1 participante')
+                return
+            }
+            const resposta = await fetch('/conversas/grupo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ nome, usuarios_ids: grupoSelecionados.map(u => u.id) })
+            })
+            const dados = await resposta.json()
+            fecharModalGrupo()
+            carregarConversas()
+            abrirConversa(dados.id, dados.nome)
+        }
+
+        function voltarSidebar() {
+            document.getElementById('area-chat').classList.remove('mobile-ativo')
+            document.getElementById('btn-voltar').style.display = 'none'
+        }
+
     </script>
 </body>
 </html>

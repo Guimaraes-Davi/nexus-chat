@@ -67,6 +67,17 @@ io.on('connection', (socket) => {
         }
 
         io.to(`conversa_${conversa_id}`).emit('nova-mensagem', mensagem)
+
+        const participantes = db.prepare(`
+            SELECT usuario_id FROM participantes WHERE conversa_id = ?
+        `).all(conversa_id)
+
+        participantes.forEach(p => {
+            const socketId = usuariosSockets[p.usuario_id]
+            if (socketId) {
+                io.to(socketId).emit('atualizar-conversas')
+            }
+        })
     })
 
     socket.on('disconnect', () => {

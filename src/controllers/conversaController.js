@@ -59,4 +59,24 @@ const listarMensagens = (req, res) => {
     res.json(mensagens)
 }
 
-module.exports = { listarConversas, criarConversa, listarMensagens }
+const criarGrupo = (req, res) => {
+    const { nome, usuarios_ids } = req.body
+
+    if (!nome || !usuarios_ids || usuarios_ids.length < 1) {
+        return res.status(400).json({ erro: 'Nome e pelo menos 1 participante são obrigatórios' })
+    }
+
+    const conversa = db.prepare(`INSERT INTO conversas (tipo, nome) VALUES ('grupo', ?)`).run(nome)
+    const id = conversa.lastInsertRowid
+
+    db.prepare(`INSERT INTO participantes (conversa_id, usuario_id) VALUES (?, ?)`).run(id, req.usuario.id)
+
+    const outrosUsuarios = usuarios_ids.filter(uid => uid !== req.usuario.id)
+    outrosUsuarios.forEach(uid => {
+        db.prepare(`INSERT INTO participantes (conversa_id, usuario_id) VALUES (?, ?)`).run(id, uid)
+    })
+
+    res.status(201).json({ id, nome })
+}
+
+module.exports = { listarConversas, criarConversa, criarGrupo, listarMensagens }
