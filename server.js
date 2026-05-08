@@ -45,7 +45,7 @@ io.on('connection', (socket) => {
     })
 
     socket.on('mensagem', (dados) => {
-        const { conversa_id, conteudo } = dados
+        const { conversa_id, conteudo, arquivo, arquivo_nome, arquivo_tipo } = dados
 
         const participante = db.prepare(`
             SELECT * FROM participantes WHERE conversa_id = ? AND usuario_id = ?
@@ -54,15 +54,19 @@ io.on('connection', (socket) => {
         if (!participante) return
 
         const resultado = db.prepare(`
-            INSERT INTO mensagens (conversa_id, remetente_id, conteudo) VALUES (?, ?, ?)
-        `).run(conversa_id, socket.usuario.id, conteudo)
+            INSERT INTO mensagens (conversa_id, remetente_id, conteudo, arquivo, arquivo_nome, arquivo_tipo)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(conversa_id, socket.usuario.id, conteudo || null, arquivo || null, arquivo_nome || null, arquivo_tipo || null)
 
         const mensagem = {
             id: resultado.lastInsertRowid,
             conversa_id,
             remetente_id: socket.usuario.id,
             username: socket.usuario.username,
-            conteudo,
+            conteudo: conteudo || null,
+            arquivo: arquivo || null,
+            arquivo_nome: arquivo_nome || null,
+            arquivo_tipo: arquivo_tipo || null,
             criado_em: new Date().toISOString()
         }
 
@@ -74,9 +78,7 @@ io.on('connection', (socket) => {
 
         participantes.forEach(p => {
             const socketId = usuariosSockets[p.usuario_id]
-            if (socketId) {
-                io.to(socketId).emit('atualizar-conversas')
-            }
+            if (socketId) io.to(socketId).emit('atualizar-conversas')
         })
     })
 

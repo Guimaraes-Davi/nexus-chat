@@ -82,7 +82,12 @@
                 </div>
 
                 <div id="mensagens"></div>
-
+                
+                <div id="preview-arquivo" style="display:none; padding:8px 20px; background:#161b22; border-top:1px solid #30363d; align-items:center; gap:10px;">
+                    <div id="preview-conteudo" style="flex:1;"></div>
+                    <button onclick="cancelarArquivo()" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:1.1rem;">✕</button>
+                </div>
+                
                 <div id="input-area">
                     <input type="file" id="input-arquivo" style="display:none" />
                     <button class="btn-anexo" onclick="document.getElementById('input-arquivo').click()">📎</button>
@@ -287,10 +292,32 @@
             const div = document.createElement('div')
             const enviada = mensagem.remetente_id === usuarioAtual.id
             div.className = `balao ${enviada ? 'enviada' : 'recebida'}`
-            const horario = new Date(mensagem.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+            const horario = new Date(mensagem.criado_em).toLocaleTimeString('pt-BR', {
+                hour: '2-digit', minute: '2-digit'
+            })
+
+            let conteudoArquivo = ''
+            if (mensagem.arquivo) {
+                const tipo = mensagem.arquivo_tipo || ''
+                if (tipo.startsWith('image/')) {
+                    conteudoArquivo = `<img src="/uploads/${mensagem.arquivo}" style="max-width:100%; border-radius:8px; margin-top:6px;" />`
+                } else if (tipo.startsWith('video/')) {
+                    conteudoArquivo = `<video controls style="max-width:100%; border-radius:8px; margin-top:6px;">
+                        <source src="/uploads/${mensagem.arquivo}" type="${tipo}">
+                    </video>`
+                } else {
+                    conteudoArquivo = `<a href="/uploads/${mensagem.arquivo}" target="_blank" 
+                        style="color:#58a6ff; font-size:0.85rem; display:block; margin-top:6px;">
+                        📎 ${mensagem.arquivo_nome}
+                    </a>`
+                }
+            }
+
             div.innerHTML = `
                 ${!enviada ? `<div class="remetente">${mensagem.username}</div>` : ''}
                 ${mensagem.conteudo ? `<div>${mensagem.conteudo}</div>` : ''}
+                ${conteudoArquivo}
                 <div class="horario">${horario}</div>
             `
             container.appendChild(div)
@@ -300,9 +327,64 @@
         async function enviarMensagem() {
             const input = document.getElementById('input-mensagem')
             const conteudo = input.value.trim()
-            if (!conteudo || !conversaAtualId) return
-            socket.emit('mensagem', { conversa_id: conversaAtualId, conteudo })
+            const arquivoInput = document.getElementById('input-arquivo')
+            const arquivo = arquivoInput.files[0]
+
+            if (!conteudo && !arquivo || !conversaAtualId) return
+
+            if (arquivo) {
+                const formData = new FormData()
+                formData.append('arquivo', arquivo)
+
+                const resposta = await fetch(`/conversas/${conversaAtualId}/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                })
+
+                const dados = await resposta.json()
+
+                socket.emit('mensagem', {
+                    conversa_id: conversaAtualId,
+                    conteudo: conteudo || null,
+                    arquivo: dados.arquivo,
+                    arquivo_nome: dados.arquivo_nome,
+                    arquivo_tipo: dados.arquivo_tipo
+                })
+
+                arquivoInput.value = ''
+            } else {
+                socket.emit('mensagem', {
+                    conversa_id: conversaAtualId,
+                    conteudo
+                })
+            }
+
             input.value = ''
+        }
+
+        document.getElementById('input-arquivo').addEventListener('change', function() {
+            const arquivo = this.files[0]
+            if (!arquivo) return
+
+            const preview = document.getElementById('preview-arquivo')
+            const conteudo = document.getElementById('preview-conteudo')
+            preview.style.display = 'flex'
+
+            if (arquivo.type.startsWith('image/')) {
+                const url = URL.createObjectURL(arquivo)
+                conteudo.innerHTML = `<img src="${url}" style="height:60px; border-radius:6px;" />`
+            } else if (arquivo.type.startsWith('video/')) {
+                conteudo.innerHTML = `<span style="color:#8b949e; font-size:0.85rem;">🎥 ${arquivo.name}</span>`
+            } else {
+                conteudo.innerHTML = `<span style="color:#8b949e; font-size:0.85rem;">📎 ${arquivo.name}</span>`
+            }
+        })
+
+        function cancelarArquivo() {
+            document.getElementById('input-arquivo').value = ''
+            document.getElementById('preview-arquivo').style.display = 'none'
+            document.getElementById('preview-conteudo').innerHTML = ''
         }
 
         document.getElementById('input-mensagem').addEventListener('keydown', (e) => {
