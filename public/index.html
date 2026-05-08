@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Chat</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+    <!-- TELA DE LOGIN/CADASTRO -->
+    <div id="tela-auth">
+        <h1>NEXUS</h1>
+        <p class="subtitulo">chat seguro e privado</p>
+
+        <div class="card">
+            <div class="tabs">
+                <div class="tab ativo" onclick="mudarTab('login')">Entrar</div>
+                <div class="tab" onclick="mudarTab('registrar')">Criar conta</div>
+            </div>
+
+            <div id="form-login">
+                <div class="campo">
+                    <label>Username</label>
+                    <input type="text" id="login-username" placeholder="seu username" />
+                </div>
+                <div class="campo">
+                    <label>Senha</label>
+                    <input type="password" id="login-senha" placeholder="sua senha" />
+                </div>
+                <button class="btn-primary" onclick="fazerLogin()">Entrar</button>
+            </div>
+
+            <div id="form-registrar" style="display:none;">
+                <div class="campo">
+                    <label>Username</label>
+                    <input type="text" id="reg-username" placeholder="escolha um username" />
+                </div>
+                <div class="campo">
+                    <label>Senha</label>
+                    <input type="password" id="reg-senha" placeholder="mínimo 6 caracteres" />
+                </div>
+                <button class="btn-primary" onclick="fazerRegistro()">Criar conta</button>
+            </div>
+
+            <div id="erro-auth"></div>
+        </div>
+    </div>
+
+    <!-- TELA DE CHAT -->
+    <div id="tela-chat">
+        <div id="sidebar">
+            <div id="sidebar-header">
+                <span class="logo">NEXUS</span>
+                <span id="usuario-logado"></span>
+            </div>
+
+            <div id="busca-usuario">
+                <input type="text" id="input-busca" placeholder="Buscar ou iniciar conversa..." 
+                    oninput="buscarUsuario(this.value)" />
+            </div>
+
+            <div id="lista-conversas"></div>
+
+            <button id="btn-logout" onclick="logout()">⬡ Sair</button>
+        </div>
+
+        <div id="area-chat">
+            <div id="tela-vazia">
+                <span style="font-size:2rem;">⬡</span>
+                <span>Selecione uma conversa ou busque um usuário</span>
+            </div>
+
+            <div id="conversa-aberta" style="display:none; flex-direction:column; height:100%;">
+                <div id="chat-header">
+                    <div class="avatar" id="header-avatar"></div>
+                    <span class="nome-conversa" id="header-nome"></span>
+                </div>
+
+                <div id="mensagens"></div>
+
+                <div id="input-area">
+                    <input type="file" id="input-arquivo" style="display:none" />
+                    <button class="btn-anexo" onclick="document.getElementById('input-arquivo').click()">📎</button>
+                    <textarea id="input-mensagem" rows="1" placeholder="Digite uma mensagem..."></textarea>
+                    <button class="btn-enviar" onclick="enviarMensagem()">➤</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let token = localStorage.getItem('token')
+        let usuarioAtual = JSON.parse(localStorage.getItem('usuario') || 'null')
+        let conversaAtualId = null
+        let socket = null
+
+        // Se já tem token, vai direto pro chat
+        if (token && usuarioAtual) {
+            mostrarChat()
+        }
+
+        function mudarTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('ativo'))
+            document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none'
+            document.getElementById('form-registrar').style.display = tab === 'registrar' ? 'block' : 'none'
+            event.target.classList.add('ativo')
+            document.getElementById('erro-auth').textContent = ''
+        }
+
+        async function fazerLogin() {
+            const username = document.getElementById('login-username').value.trim()
+            const senha = document.getElementById('login-senha').value
+            const erro = document.getElementById('erro-auth')
+
+            const resposta = await fetch('/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, senha })
+            })
+
+            const dados = await resposta.json()
+
+            if (dados.erro) {
+                erro.textContent = dados.erro
+                return
+            }
+
+            salvarSessao(dados)
+            mostrarChat()
+        }
+
+        async function fazerRegistro() {
+            const username = document.getElementById('reg-username').value.trim()
+            const senha = document.getElementById('reg-senha').value
+            const erro = document.getElementById('erro-auth')
+
+            const resposta = await fetch('/auth/registrar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, senha })
+            })
+
+            const dados = await resposta.json()
+
+            if (dados.erro) {
+                erro.textContent = dados.erro
+                return
+            }
+
+            salvarSessao(dados)
+            mostrarChat()
+        }
+
+        function salvarSessao(dados) {
+            token = dados.token
+            usuarioAtual = { id: dados.id, username: dados.username }
+            localStorage.setItem('token', token)
+            localStorage.setItem('usuario', JSON.stringify(usuarioAtual))
+        }
+
+        function mostrarChat() {
+            document.getElementById('tela-auth').style.display = 'none'
+            document.getElementById('tela-chat').style.display = 'flex'
+            document.getElementById('usuario-logado').textContent = '@' + usuarioAtual.username
+            iniciarSocket()
+            carregarConversas()
+        }
+
+        function logout() {
+            localStorage.removeItem('token')
+            localStorage.removeItem('usuario')
+            location.reload()
+        }
+
+        function iniciarSocket() {
+            socket = io({ auth: { token } })
+
+            socket.on('connect', () => {
+                console.log('Socket conectado')
+            })
+
+            socket.on('nova-mensagem', (mensagem) => {
+                if (mensagem.conversa_id === conversaAtualId) {
+                    adicionarBalao(mensagem)
+                }
+                carregarConversas()
+            })
+
+            socket.on('erro', (msg) => {
+                console.error('Erro socket:', msg)
+            })
+        }
+
+        async function carregarConversas() {
+            const resposta = await fetch('/conversas', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            const conversas = await resposta.json()
+            renderizarConversas(conversas)
+        }
+
+        function renderizarConversas(conversas) {
+            const lista = document.getElementById('lista-conversas')
+            lista.innerHTML = ''
+
+            if (conversas.length === 0) {
+                lista.innerHTML = '<p style="padding:16px; color:#6e7681; font-size:0.8rem;">Nenhuma conversa ainda</p>'
+                return
+            }
+
+            conversas.forEach(c => {
+                const div = document.createElement('div')
+                div.className = 'conversa-item' + (c.id === conversaAtualId ? ' ativa' : '')
+                div.onclick = () => abrirConversa(c.id, c.nome)
+                div.innerHTML = `
+                    <div class="avatar">${c.nome[0].toUpperCase()}</div>
+                    <div class="conversa-info">
+                        <div class="nome">${c.nome}</div>
+                        <div class="ultima-msg">${c.ultima_mensagem || 'Nenhuma mensagem'}</div>
+                    </div>
+                `
+                lista.appendChild(div)
+            })
+        }
+
+        async function buscarUsuario(termo) {
+            if (termo.length < 2) {
+                carregarConversas()
+                return
+            }
+
+            const resposta = await fetch(`/usuarios/buscar?q=${termo}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            const usuarios = await resposta.json()
+            const lista = document.getElementById('lista-conversas')
+            lista.innerHTML = ''
+
+            usuarios.forEach(u => {
+                const div = document.createElement('div')
+                div.className = 'conversa-item'
+                div.onclick = () => iniciarConversa(u.id, u.username)
+                div.innerHTML = `
+                    <div class="avatar">${u.username[0].toUpperCase()}</div>
+                    <div class="conversa-info">
+                        <div class="nome">${u.username}</div>
+                        <div class="ultima-msg">Iniciar conversa</div>
+                    </div>
+                `
+                lista.appendChild(div)
+            })
+        }
+
+        async function iniciarConversa(usuarioId, username) {
+            const resposta = await fetch('/conversas', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ usuario_id: usuarioId })
+            })
+            const dados = await resposta.json()
+            abrirConversa(dados.id, username)
+            carregarConversas()
+        }
+
+        async function abrirConversa(id, nome) {
+            conversaAtualId = id
+            document.getElementById('tela-vazia').style.display = 'none'
+            const conv = document.getElementById('conversa-aberta')
+            conv.style.display = 'flex'
+            document.getElementById('header-nome').textContent = nome
+            document.getElementById('header-avatar').textContent = nome[0].toUpperCase()
+
+            document.querySelectorAll('.conversa-item').forEach(el => el.classList.remove('ativa'))
+
+            const resposta = await fetch(`/conversas/${id}/mensagens`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            const mensagens = await resposta.json()
+            const container = document.getElementById('mensagens')
+            container.innerHTML = ''
+            mensagens.forEach(m => adicionarBalao(m))
+            container.scrollTop = container.scrollHeight
+
+            socket.emit('entrar-conversa', id)
+        }
+
+        function adicionarBalao(mensagem) {
+            const container = document.getElementById('mensagens')
+            const div = document.createElement('div')
+            const enviada = mensagem.remetente_id === usuarioAtual.id
+            div.className = `balao ${enviada ? 'enviada' : 'recebida'}`
+
+            const horario = new Date(mensagem.criado_em).toLocaleTimeString('pt-BR', {
+                hour: '2-digit', minute: '2-digit'
+            })
+
+            div.innerHTML = `
+                ${!enviada ? `<div class="remetente">${mensagem.username}</div>` : ''}
+                ${mensagem.conteudo ? `<div>${mensagem.conteudo}</div>` : ''}
+                <div class="horario">${horario}</div>
+            `
+            container.appendChild(div)
+            container.scrollTop = container.scrollHeight
+        }
+
+        async function enviarMensagem() {
+            const input = document.getElementById('input-mensagem')
+            const conteudo = input.value.trim()
+
+            if (!conteudo || !conversaAtualId) return
+
+            socket.emit('mensagem', {
+                conversa_id: conversaAtualId,
+                conteudo
+            })
+
+            input.value = ''
+        }
+
+        document.getElementById('input-mensagem').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                enviarMensagem()
+            }
+        })
+    </script>
+</body>
+</html>

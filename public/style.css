@@ -1,0 +1,369 @@
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background-color: #0d1117;
+    color: #c9d1d9;
+    font-family: 'Segoe UI', sans-serif;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ========== TELA DE AUTH ========== */
+#tela-auth {
+    width: 100%;
+    max-width: 380px;
+    padding: 20px;
+}
+
+#tela-auth h1 {
+    font-size: 2rem;
+    color: #58a6ff;
+    text-align: center;
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+}
+
+#tela-auth .subtitulo {
+    text-align: center;
+    color: #6e7681;
+    font-size: 0.85rem;
+    margin-bottom: 32px;
+}
+
+.card {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.tabs {
+    display: flex;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #30363d;
+}
+
+.tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    color: #6e7681;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.tab.ativo {
+    color: #58a6ff;
+    border-bottom-color: #58a6ff;
+}
+
+.campo {
+    margin-bottom: 16px;
+}
+
+.campo label {
+    display: block;
+    font-size: 0.8rem;
+    color: #8b949e;
+    margin-bottom: 6px;
+}
+
+.campo input {
+    width: 100%;
+    padding: 10px 14px;
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    color: #c9d1d9;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border 0.2s;
+}
+
+.campo input:focus { border-color: #58a6ff; }
+
+.btn-primary {
+    width: 100%;
+    padding: 11px;
+    background-color: #238636;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 4px;
+}
+
+.btn-primary:hover { background-color: #2ea043; }
+
+#erro-auth {
+    color: #f85149;
+    font-size: 0.8rem;
+    text-align: center;
+    margin-top: 12px;
+    min-height: 20px;
+}
+
+/* ========== TELA DE CHAT ========== */
+#tela-chat {
+    display: none;
+    width: 100%;
+    height: 100vh;
+    flex-direction: row;
+}
+
+/* SIDEBAR */
+#sidebar {
+    width: 280px;
+    min-width: 280px;
+    background-color: #161b22;
+    border-right: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+}
+
+#sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#sidebar-header .logo {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #58a6ff;
+    letter-spacing: 1px;
+}
+
+#usuario-logado {
+    font-size: 0.8rem;
+    color: #6e7681;
+}
+
+#busca-usuario {
+    padding: 12px 16px;
+    border-bottom: 1px solid #30363d;
+}
+
+#busca-usuario input {
+    width: 100%;
+    padding: 8px 12px;
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    color: #c9d1d9;
+    font-size: 0.85rem;
+    outline: none;
+}
+
+#busca-usuario input:focus { border-color: #58a6ff; }
+
+#lista-conversas {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.conversa-item {
+    padding: 14px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #21262d;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.conversa-item:hover { background-color: #1c2128; }
+.conversa-item.ativa { background-color: #1c2128; border-left: 3px solid #58a6ff; }
+
+.avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background-color: #238636;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.conversa-info .nome {
+    font-size: 0.9rem;
+    color: #c9d1d9;
+}
+
+.conversa-info .ultima-msg {
+    font-size: 0.75rem;
+    color: #6e7681;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
+#btn-logout {
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    border-top: 1px solid #30363d;
+    color: #f85149;
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-align: left;
+    width: 100%;
+}
+
+#btn-logout:hover { background-color: #1c2128; }
+
+/* ÁREA DE CHAT */
+#area-chat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+#chat-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: #161b22;
+}
+
+#chat-header .nome-conversa {
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+#mensagens {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#tela-vazia {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6e7681;
+    font-size: 0.9rem;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.balao {
+    max-width: 65%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.balao.enviada {
+    background-color: #1f6feb;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+.balao.recebida {
+    background-color: #21262d;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+
+.balao .remetente {
+    font-size: 0.7rem;
+    color: #8b949e;
+    margin-bottom: 4px;
+}
+
+.balao .horario {
+    font-size: 0.65rem;
+    color: #8b949e;
+    text-align: right;
+    margin-top: 4px;
+}
+
+#input-area {
+    padding: 16px 20px;
+    border-top: 1px solid #30363d;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background-color: #161b22;
+}
+
+#input-mensagem {
+    flex: 1;
+    padding: 10px 14px;
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 20px;
+    color: #c9d1d9;
+    font-size: 0.9rem;
+    outline: none;
+    resize: none;
+    max-height: 120px;
+}
+
+#input-mensagem:focus { border-color: #58a6ff; }
+
+.btn-enviar {
+    width: 40px;
+    height: 40px;
+    background-color: #1f6feb;
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-enviar:hover { background-color: #388bfd; }
+
+.btn-anexo {
+    width: 36px;
+    height: 36px;
+    background: none;
+    border: 1px solid #30363d;
+    border-radius: 50%;
+    color: #8b949e;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-anexo:hover { border-color: #58a6ff; color: #58a6ff; }
+
+/* RESPONSIVO */
+@media (max-width: 600px) {
+    #sidebar { width: 100%; min-width: unset; }
+    #tela-chat { flex-direction: column; }
+}

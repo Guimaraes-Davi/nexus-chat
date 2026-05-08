@@ -3,6 +3,7 @@ const http = require('http')
 const { Server } = require('socket.io')
 const dotenv = require('dotenv')
 const path = require('path')
+const jwt = require('jsonwebtoken')
 
 dotenv.config()
 
@@ -14,20 +15,68 @@ app.use(express.json())
 app.use(express.static(path.join(__dirname, 'public')))
 
 const authRoutes = require('./src/routes/authRoutes')
-app.use('/auth', authRoutes)
+const conversaRoutes = require('./src/routes/conversaRoutes')
+const usuarioRoutes = require('./src/routes/usuarioRoutes')
+const db = require('./src/models/database')
 
-const PORT = process.env.PORT || 3000
+app.use('/auth', authRoutes)
+app.use('/conversas', conversaRoutes)
+app.use('/usuarios', usuarioRoutes)
+
+const usuariosSockets = {}
+
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET)
+        socket.usuario = decoded
+        next()
+    } catch (e) {
+        next(new Error('Token inválido'))
+    }
+})
 
 io.on('connection', (socket) => {
-    console.log(`Usuário conectado: ${socket.id}`)
+    usuariosSockets[socket.usuario.id] = socket.id
+    console.log(`${socket.usuario.username} conectado`)
+
+    socket.on('entrar-conversa', (conversaId) => {
+        socket.join(`conversa_${conversaId}`)
+    })
+
+    socket.on('mensagem', (dados) => {
+        const { conversa_id, conteudo } = dados
+
+        const participante = db.prepare(`
+            SELECT * FROM participantes WHERE conversa_id = ? AND usuario_id = ?
+        `).get(conversa_id, socket.usuario.id)
+
+        if (!participante) return
+
+        const resultado = db.prepare(`
+            INSERT INTO mensagens (conversa_id, remetente_id, conteudo) VALUES (?, ?, ?)
+        `).run(conversa_id, socket.usuario.id, conteudo)
+
+        const mensagem = {
+            id: resultado.lastInsertRowid,
+            conversa_id,
+            remetente_id: socket.usuario.id,
+            username: socket.usuario.username,
+            conteudo,
+            criado_em: new Date().toISOString()
+        }
+
+        io.to(`conversa_${conversa_id}`).emit('nova-mensagem', mensagem)
+    })
 
     socket.on('disconnect', () => {
-        console.log(`Usuário desconectado: ${socket.id}`)
+        delete usuariosSockets[socket.usuario.id]
+        console.log(`${socket.usuario.username} desconectado`)
     })
 })
+
+const PORT = process.env.PORT || 3000
 
 server.listen(PORT, () => {
     console.log(`Nexus Chat rodando na porta ${PORT}`)
 })
-
-module.exports = { io }
