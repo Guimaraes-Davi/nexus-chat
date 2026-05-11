@@ -87,6 +87,10 @@
                     <div id="preview-conteudo" style="flex:1;"></div>
                     <button onclick="cancelarArquivo()" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:1.1rem;">✕</button>
                 </div>
+
+                <div id="indicador-digitando" style="display:none; padding:6px 20px; color:#6e7681; font-size:0.8rem; font-style:italic;">
+                    <span id="texto-digitando"></span>
+                </div>
                 
                 <div id="input-area">
                     <input type="file" id="input-arquivo" style="display:none" />
@@ -273,6 +277,18 @@
 
             socket.on('atualizar-conversas', () => carregarConversas())
             socket.on('erro', (msg) => console.error('Erro socket:', msg))
+
+            socket.on('usuario-digitando', (dados) => {
+                if (dados.conversa_id === conversaAtualId && dados.usuario_id !== usuarioAtual.id) {
+                    mostrarDigitando(dados.username)
+                }
+            })
+
+            socket.on('usuario-parou', (dados) => {
+                if (dados.conversa_id === conversaAtualId) {
+                    esconderDigitando()
+                }
+            })
         }
 
         async function carregarConversas() {
@@ -607,6 +623,32 @@
             document.getElementById('area-chat').classList.remove('mobile-ativo')
             document.getElementById('btn-voltar').style.display = 'none'
         }
+
+        let timeoutDigitando = null
+
+        function mostrarDigitando(username) {
+            document.getElementById('texto-digitando').textContent = `${username} está digitando...`
+            document.getElementById('indicador-digitando').style.display = 'block'
+        }
+
+        function esconderDigitando() {
+            document.getElementById('indicador-digitando').style.display = 'none'
+            document.getElementById('texto-digitando').textContent = ''
+        }
+
+        document.getElementById('input-mensagem').addEventListener('input', () => {
+            if (!conversaAtualId) return
+
+            socket.emit('digitando', {
+                conversa_id: conversaAtualId,
+                username: usuarioAtual.username
+            })
+
+            clearTimeout(timeoutDigitando)
+            timeoutDigitando = setTimeout(() => {
+                socket.emit('parou-digitar', { conversa_id: conversaAtualId })
+            }, 1500)
+        })
 
     </script>
 </body>

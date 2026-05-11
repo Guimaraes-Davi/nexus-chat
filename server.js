@@ -93,6 +93,21 @@ io.on('connection', (socket) => {
         delete usuariosSockets[socket.usuario.id]
         console.log(`${socket.usuario.username} desconectado`)
     })
+
+    socket.on('digitando', (dados) => {
+        socket.to(`conversa_${dados.conversa_id}`).emit('usuario-digitando', {
+            conversa_id: dados.conversa_id,
+            usuario_id: socket.usuario.id,
+            username: socket.usuario.username
+        })
+    })
+
+    socket.on('parou-digitar', (dados) => {
+        socket.to(`conversa_${dados.conversa_id}`).emit('usuario-parou', {
+            conversa_id: dados.conversa_id
+        })
+    })
+
 })
 
 const PORT = process.env.PORT || 3000
