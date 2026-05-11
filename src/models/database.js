@@ -37,6 +37,7 @@ db.exec(`
         arquivo TEXT DEFAULT NULL,
         arquivo_tipo TEXT DEFAULT NULL,
         arquivo_nome TEXT DEFAULT NULL,
+        lida_por TEXT DEFAULT '[]',
         criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (conversa_id) REFERENCES conversas(id),
         FOREIGN KEY (remetente_id) REFERENCES usuarios(id)

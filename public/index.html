@@ -289,6 +289,14 @@
                     esconderDigitando()
                 }
             })
+
+            socket.on('mensagem-lida', (dados) => {
+                const statusEl = document.getElementById(`status-${dados.mensagem_id}`)
+                if (statusEl) {
+                    statusEl.textContent = ' ✓✓'
+                    statusEl.classList.add('lida')
+                }
+            })
         }
 
         async function carregarConversas() {
@@ -469,12 +477,24 @@
                 }
             }
 
+            const jaLida = mensagem.lida_por && mensagem.lida_por.length > 1
+
             div.innerHTML = `
                 ${!enviada ? `<div class="remetente">${mensagem.username}</div>` : ''}
                 ${textoExibido ? `<div>${textoExibido}</div>` : ''}
                 ${conteudoArquivo}
-                <div class="horario">${horario}</div>
+                <div class="horario">
+                    ${horario}
+                    ${enviada ? `<span class="status-leitura ${jaLida ? 'lida' : ''}" id="status-${mensagem.id}">${jaLida ? ' ✓✓' : ' ✓'}</span>` : ''}
+                </div>
             `
+
+            if (!enviada && mensagem.id) {
+                socket.emit('marcar-lida', {
+                    mensagem_id: mensagem.id,
+                    conversa_id: mensagem.conversa_id
+                })
+            }
             container.appendChild(div)
             container.scrollTop = container.scrollHeight
         }

@@ -65,7 +65,10 @@ const listarMensagens = (req, res) => {
         ORDER BY m.criado_em ASC
     `).all(id)
 
-    res.json(mensagens)
+    res.json(mensagens.map(m => ({
+        ...m,
+        lida_por: JSON.parse(m.lida_por || '[]')
+    })))
 }
 
 const criarGrupo = (req, res) => {

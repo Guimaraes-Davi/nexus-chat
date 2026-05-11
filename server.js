@@ -108,6 +108,24 @@ io.on('connection', (socket) => {
         })
     })
 
+    socket.on('marcar-lida', (dados) => {
+        const { mensagem_id, conversa_id } = dados
+        
+        const mensagem = db.prepare('SELECT lida_por FROM mensagens WHERE id = ?').get(mensagem_id)
+        if (!mensagem) return
+
+        const lidaPor = JSON.parse(mensagem.lida_por || '[]')
+        if (!lidaPor.includes(socket.usuario.id)) {
+            lidaPor.push(socket.usuario.id)
+            db.prepare('UPDATE mensagens SET lida_por = ? WHERE id = ?').run(JSON.stringify(lidaPor), mensagem_id)
+            
+            io.to(`conversa_${conversa_id}`).emit('mensagem-lida', {
+                mensagem_id,
+                lida_por: lidaPor
+            })
+        }
+    })
+
 })
 
 const PORT = process.env.PORT || 3000
