@@ -119,12 +119,55 @@
         </div>
     </div>
 
+    <script src="/nacl.js"></script>
+    <script src="/nacl-util.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script>
         let token = localStorage.getItem('token')
         let usuarioAtual = JSON.parse(localStorage.getItem('usuario') || 'null')
         let conversaAtualId = null
         let socket = null
+        let sodium = null
+        let conversaAtualPrivada = false
+        let chavePublicaDestinatario = null
+        let chavePublicaDestinatarioId = null
+
+        async function inicializarSodium() {
+            return true
+        }
+
+        async function gerarChaves() {
+            const par = nacl.box.keyPair()
+            return {
+                chavePublica: nacl.util.encodeBase64(par.publicKey),
+                chavePrivada: nacl.util.encodeBase64(par.secretKey)
+            }
+        }
+
+        async function criptografarMensagem(conteudo, chavePublicaDestinatarioB64, chavePrivadaRemetenteB64) {
+            const chavePublicaDestinatario = nacl.util.decodeBase64(chavePublicaDestinatarioB64)
+            const chavePrivadaRemetente = nacl.util.decodeBase64(chavePrivadaRemetenteB64)
+            const chavePublicaRemetente = nacl.util.decodeBase64(localStorage.getItem('chave_publica'))
+            const mensagemBytes = nacl.util.decodeUTF8(conteudo)
+
+            const nonce1 = nacl.randomBytes(nacl.box.nonceLength)
+            const nonce2 = nacl.randomBytes(nacl.box.nonceLength)
+
+            const cifradoDestinatario = nacl.box(mensagemBytes, nonce1, chavePublicaDestinatario, chavePrivadaRemetente)
+            const cifradoRemetente = nacl.box(mensagemBytes, nonce2, chavePublicaRemetente, chavePrivadaRemetente)
+
+            return {
+                para_destinatario: {
+                    cifrado: nacl.util.encodeBase64(cifradoDestinatario),
+                    nonce: nacl.util.encodeBase64(nonce1)
+                },
+                para_remetente: {
+                    cifrado: nacl.util.encodeBase64(cifradoRemetente),
+                    nonce: nacl.util.encodeBase64(nonce2)
+                },
+                criptografado: true
+            }
+        }
 
         if (token && usuarioAtual) mostrarChat()
 
@@ -140,14 +183,22 @@
             const username = document.getElementById('login-username').value.trim()
             const senha = document.getElementById('login-senha').value
             const erro = document.getElementById('erro-auth')
+
             const resposta = await fetch('/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, senha })
             })
+
             const dados = await resposta.json()
-            if (dados.erro) { erro.textContent = dados.erro; return }
-            salvarSessao(dados)
+
+            if (dados.erro) {
+                erro.textContent = dados.erro
+                return
+            }
+
+            const temChaves = localStorage.getItem('chave_privada')
+            await salvarSessao(dados, !temChaves)
             mostrarChat()
         }
 
@@ -162,15 +213,30 @@
             })
             const dados = await resposta.json()
             if (dados.erro) { erro.textContent = dados.erro; return }
-            salvarSessao(dados)
+            salvarSessao(dados, true)
             mostrarChat()
         }
 
-        function salvarSessao(dados) {
+        async function salvarSessao(dados, novoUsuario = false) {
             token = dados.token
             usuarioAtual = { id: dados.id, username: dados.username }
             localStorage.setItem('token', token)
             localStorage.setItem('usuario', JSON.stringify(usuarioAtual))
+
+            if (novoUsuario) {
+                const { chavePublica, chavePrivada } = await gerarChaves()
+                localStorage.setItem('chave_privada', chavePrivada)
+                localStorage.setItem('chave_publica', chavePublica)
+
+                await fetch('/usuarios/chave-publica', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ chave_publica: chavePublica })
+                })
+            }
         }
 
         function mostrarChat() {
@@ -187,17 +253,26 @@
             location.reload()
         }
 
-        function iniciarSocket() {
+        async function iniciarSocket() {
             socket = io({ auth: { token } })
             socket.on('connect', () => console.log('Socket conectado'))
-            socket.on('nova-mensagem', (mensagem) => {
-                if (mensagem.conversa_id === conversaAtualId) adicionarBalao(mensagem)
+            
+            socket.on('nova-mensagem', async (mensagem) => {
+                if (mensagem.conversa_id === conversaAtualId) {
+                    if (!chavePublicaDestinatario && conversaAtualPrivada && mensagem.remetente_id !== usuarioAtual.id) {
+                        const resposta = await fetch(`/usuarios/${mensagem.remetente_id}/chave-publica`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        })
+                        const dados = await resposta.json()
+                        chavePublicaDestinatario = dados.chave_publica
+                    }
+                    await adicionarBalao(mensagem)
+                }
                 carregarConversas()
             })
+
+            socket.on('atualizar-conversas', () => carregarConversas())
             socket.on('erro', (msg) => console.error('Erro socket:', msg))
-            socket.on('atualizar-conversas', () => {
-                carregarConversas()
-            })
         }
 
         async function carregarConversas() {
@@ -211,19 +286,23 @@
         function renderizarConversas(conversas) {
             const lista = document.getElementById('lista-conversas')
             lista.innerHTML = ''
+            
             if (conversas.length === 0) {
                 lista.innerHTML = '<p style="padding:16px; color:#6e7681; font-size:0.8rem;">Nenhuma conversa ainda</p>'
                 return
             }
+            
             conversas.forEach(c => {
                 const div = document.createElement('div')
                 div.className = 'conversa-item' + (c.id === conversaAtualId ? ' ativa' : '')
-                div.onclick = () => abrirConversa(c.id, c.nome)
+                div.onclick = () => abrirConversa(c.id, c.nome, c.tipo, c.destinatario_id)
+
+                let ultimaMsg = ''
+
                 div.innerHTML = `
                     <div class="avatar">${c.nome[0].toUpperCase()}</div>
                     <div class="conversa-info">
                         <div class="nome">${c.nome}</div>
-                        <div class="ultima-msg">${c.ultima_mensagem || 'Nenhuma mensagem'}</div>
                     </div>
                 `
                 lista.appendChild(div)
@@ -256,46 +335,106 @@
         async function iniciarConversa(usuarioId, username) {
             const resposta = await fetch('/conversas', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ usuario_id: usuarioId })
             })
             const dados = await resposta.json()
-            abrirConversa(dados.id, username)
+            abrirConversa(dados.id, username, 'privada', usuarioId)
             carregarConversas()
         }
 
-        async function abrirConversa(id, nome) {
+        async function abrirConversa(id, nome, tipo = 'privada', destinatarioId = null) {
             conversaAtualId = id
+            conversaAtualPrivada = tipo === 'privada'
+            chavePublicaDestinatario = null
+
+            // busca a chave ANTES de carregar mensagens
+            if (tipo === 'privada' && destinatarioId) {
+                const resposta = await fetch(`/usuarios/${destinatarioId}/chave-publica`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                const dados = await resposta.json()
+                chavePublicaDestinatario = dados.chave_publica
+                chavePublicaDestinatarioId = destinatarioId
+            }
+
             if (window.innerWidth <= 600) {
                 document.getElementById('area-chat').classList.add('mobile-ativo')
                 document.getElementById('btn-voltar').style.display = 'block'
             }
+
             document.getElementById('tela-vazia').style.display = 'none'
             const conv = document.getElementById('conversa-aberta')
             conv.style.display = 'flex'
             document.getElementById('header-nome').textContent = nome
             document.getElementById('header-avatar').textContent = nome[0].toUpperCase()
             document.querySelectorAll('.conversa-item').forEach(el => el.classList.remove('ativa'))
+
             const resposta = await fetch(`/conversas/${id}/mensagens`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             const mensagens = await resposta.json()
             const container = document.getElementById('mensagens')
             container.innerHTML = ''
-            mensagens.forEach(m => adicionarBalao(m))
+            
+            // processa mensagens em sequência garantindo que chave está disponível
+            for (const m of mensagens) {
+                await adicionarBalao(m)
+            }
+            
             container.scrollTop = container.scrollHeight
             socket.emit('entrar-conversa', id)
         }
 
-        function adicionarBalao(mensagem) {
+        async function adicionarBalao(mensagem) {
             const container = document.getElementById('mensagens')
             const div = document.createElement('div')
-            const enviada = mensagem.remetente_id === usuarioAtual.id
+            const enviada = Number(mensagem.remetente_id) === Number(usuarioAtual.id)
             div.className = `balao ${enviada ? 'enviada' : 'recebida'}`
 
             const horario = new Date(mensagem.criado_em).toLocaleTimeString('pt-BR', {
                 hour: '2-digit', minute: '2-digit'
             })
+
+            let textoExibido = mensagem.conteudo || ''
+
+            if (textoExibido) {
+                try {
+                    const parsed = JSON.parse(textoExibido)
+                    if (parsed.criptografado) {
+                        const chavePrivada = localStorage.getItem('chave_privada')
+
+                        if (enviada) {
+                            // remetente descriptografa o pacote para_remetente
+                            const pacote = parsed.para_remetente
+                            const cifrado = nacl.util.decodeBase64(pacote.cifrado)
+                            const nonce = nacl.util.decodeBase64(pacote.nonce)
+                            const chavePublica = nacl.util.decodeBase64(localStorage.getItem('chave_publica'))
+                            const chavePrivadaBytes = nacl.util.decodeBase64(chavePrivada)
+                            const decifrado = nacl.box.open(cifrado, nonce, chavePublica, chavePrivadaBytes)
+                            textoExibido = decifrado ? nacl.util.encodeUTF8(decifrado) : '🔒 não foi possível descriptografar'
+                        } else {
+                            // destinatário descriptografa o pacote para_destinatario
+                            if (!chavePublicaDestinatario) {
+                                textoExibido = '🔒 mensagem criptografada'
+                            } else {
+                                const pacote = parsed.para_destinatario
+                                const cifrado = nacl.util.decodeBase64(pacote.cifrado)
+                                const nonce = nacl.util.decodeBase64(pacote.nonce)
+                                const chavePublicaRemetente = nacl.util.decodeBase64(chavePublicaDestinatario)
+                                const chavePrivadaBytes = nacl.util.decodeBase64(chavePrivada)
+                                const decifrado = nacl.box.open(cifrado, nonce, chavePublicaRemetente, chavePrivadaBytes)
+                                textoExibido = decifrado ? nacl.util.encodeUTF8(decifrado) : '🔒 não foi possível descriptografar'
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // texto normal, não era JSON
+                }
+            }
 
             let conteudoArquivo = ''
             if (mensagem.arquivo) {
@@ -316,7 +455,7 @@
 
             div.innerHTML = `
                 ${!enviada ? `<div class="remetente">${mensagem.username}</div>` : ''}
-                ${mensagem.conteudo ? `<div>${mensagem.conteudo}</div>` : ''}
+                ${textoExibido ? `<div>${textoExibido}</div>` : ''}
                 ${conteudoArquivo}
                 <div class="horario">${horario}</div>
             `
@@ -324,39 +463,44 @@
             container.scrollTop = container.scrollHeight
         }
 
+        
         async function enviarMensagem() {
             const input = document.getElementById('input-mensagem')
             const conteudo = input.value.trim()
             const arquivoInput = document.getElementById('input-arquivo')
             const arquivo = arquivoInput.files[0]
 
-            if (!conteudo && !arquivo || !conversaAtualId) return
+            if ((!conteudo && !arquivo) || !conversaAtualId) return
+
+            let conteudoFinal = conteudo
+
+            if (conteudo && conversaAtualPrivada && chavePublicaDestinatario) {
+                const chavePrivada = localStorage.getItem('chave_privada')
+                const dadosCripto = await criptografarMensagem(conteudo, chavePublicaDestinatario, chavePrivada)
+                conteudoFinal = JSON.stringify(dadosCripto)
+            }
 
             if (arquivo) {
                 const formData = new FormData()
                 formData.append('arquivo', arquivo)
-
                 const resposta = await fetch(`/conversas/${conversaAtualId}/upload`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formData
                 })
-
                 const dados = await resposta.json()
-
                 socket.emit('mensagem', {
                     conversa_id: conversaAtualId,
-                    conteudo: conteudo || null,
+                    conteudo: conteudoFinal || null,
                     arquivo: dados.arquivo,
                     arquivo_nome: dados.arquivo_nome,
                     arquivo_tipo: dados.arquivo_tipo
                 })
-
-                arquivoInput.value = ''
+                cancelarArquivo()
             } else {
                 socket.emit('mensagem', {
                     conversa_id: conversaAtualId,
-                    conteudo
+                    conteudo: conteudoFinal
                 })
             }
 

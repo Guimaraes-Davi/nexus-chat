@@ -13,6 +13,13 @@ const io = new Server(server)
 
 app.use(express.json())
 app.use(express.static(path.join(__dirname, 'public')))
+app.get('/nacl.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'node_modules/tweetnacl/nacl-fast.js'))
+})
+
+app.get('/nacl-util.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'node_modules/tweetnacl-util/nacl-util.js'))
+})
 
 const authRoutes = require('./src/routes/authRoutes')
 const conversaRoutes = require('./src/routes/conversaRoutes')

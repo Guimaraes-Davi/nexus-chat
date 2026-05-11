@@ -8,6 +8,7 @@ db.exec(`
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         senha TEXT NOT NULL,
+        chave_publica TEXT DEFAULT NULL,
         avatar TEXT DEFAULT NULL,
         online INTEGER DEFAULT 0,
         criado_em DATETIME DEFAULT CURRENT_TIMESTAMP

@@ -2,7 +2,8 @@ const db = require('../models/database')
 
 const listarConversas = (req, res) => {
     const conversas = db.prepare(`
-        SELECT c.id, 
+        SELECT c.id,
+               c.tipo,
                CASE 
                    WHEN c.tipo = 'privada' THEN (
                        SELECT u.username FROM usuarios u
@@ -11,12 +12,20 @@ const listarConversas = (req, res) => {
                    )
                    ELSE c.nome
                END as nome,
+               CASE
+                   WHEN c.tipo = 'privada' THEN (
+                       SELECT u.id FROM usuarios u
+                       JOIN participantes p ON p.usuario_id = u.id
+                       WHERE p.conversa_id = c.id AND u.id != ?
+                   )
+                   ELSE NULL
+               END as destinatario_id,
                (SELECT m.conteudo FROM mensagens m WHERE m.conversa_id = c.id ORDER BY m.criado_em DESC LIMIT 1) as ultima_mensagem
         FROM conversas c
         JOIN participantes p ON p.conversa_id = c.id
         WHERE p.usuario_id = ?
         ORDER BY (SELECT MAX(m.criado_em) FROM mensagens m WHERE m.conversa_id = c.id) DESC
-    `).all(req.usuario.id, req.usuario.id)
+    `).all(req.usuario.id, req.usuario.id, req.usuario.id)
 
     res.json(conversas)
 }
