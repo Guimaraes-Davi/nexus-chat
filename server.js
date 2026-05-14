@@ -61,8 +61,8 @@ io.on('connection', (socket) => {
         if (!participante) return
 
         const resultado = db.prepare(`
-            INSERT INTO mensagens (conversa_id, remetente_id, conteudo, arquivo, arquivo_nome, arquivo_tipo)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO mensagens (conversa_id, remetente_id, conteudo, arquivo, arquivo_nome, arquivo_tipo, lida_por)
+            VALUES (?, ?, ?, ?, ?, ?, '[]')
         `).run(conversa_id, socket.usuario.id, conteudo || null, arquivo || null, arquivo_nome || null, arquivo_tipo || null)
 
         const mensagem = {
@@ -74,7 +74,8 @@ io.on('connection', (socket) => {
             arquivo: arquivo || null,
             arquivo_nome: arquivo_nome || null,
             arquivo_tipo: arquivo_tipo || null,
-            criado_em: new Date().toISOString()
+            criado_em: new Date().toISOString(),
+            lida_por: '[]'
         }
 
         io.to(`conversa_${conversa_id}`).emit('nova-mensagem', mensagem)

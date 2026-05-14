@@ -417,6 +417,8 @@
             const container = document.getElementById('mensagens')
             const div = document.createElement('div')
             const enviada = Number(mensagem.remetente_id) === Number(usuarioAtual.id)
+            const { id, remetente_id, username, conteudo, arquivo, arquivo_tipo, arquivo_nome, criado_em, lida_por, conversa_id } = mensagem
+            console.log(`[DEBUG lida_por] msg_id=${id}, lida_por=`, lida_por, `typeof=${typeof lida_por}`)
             div.className = `balao ${enviada ? 'enviada' : 'recebida'}`
 
             const horario = new Date(mensagem.criado_em).toLocaleTimeString('pt-BR', {
@@ -477,7 +479,10 @@
                 }
             }
 
-            const jaLida = mensagem.lida_por && mensagem.lida_por.length > 1
+            const lidaPor = Array.isArray(mensagem.lida_por)
+                ? mensagem.lida_por
+                : JSON.parse(mensagem.lida_por || '[]')
+            const jaLida = lidaPor.length > 0
 
             div.innerHTML = `
                 ${!enviada ? `<div class="remetente">${mensagem.username}</div>` : ''}
